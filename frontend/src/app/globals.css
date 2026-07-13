@@ -1,0 +1,84 @@
+@import "tailwindcss";
+
+:root {
+  --background: #050505;
+  --foreground: #e2e8f0;
+  --panel-bg: #09090b;
+  --border-color: #1e1e24;
+  --accent-color: #ff7a00; /* Cyber Amber */
+  --accent-glow: rgba(255, 122, 0, 0.1);
+  --success-color: #10b981; /* Cyber Sage */
+  --danger-color: #ef4444; /* Crimson */
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-panel: var(--panel-bg);
+  --color-border: var(--border-color);
+  --color-accent: var(--accent-color);
+  --color-success: var(--success-color);
+  --color-danger: var(--danger-color);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Console Panel Structure */
+.console-panel {
+  background: var(--panel-bg);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 4px 20px 0 rgba(0, 0, 0, 0.5);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.console-panel:hover {
+  border-color: rgba(255, 122, 0, 0.25);
+  box-shadow: 0 4px 25px 0 var(--accent-glow);
+}
+
+/* Accent Highlight Line */
+.accent-line {
+  position: relative;
+}
+.accent-line::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  width: 24px;
+  background-color: var(--accent-color);
+}
+
+/* Simple Micro-animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Monospace Details Table */
+.data-mono {
+  font-family: var(--font-geist-mono), monospace;
+  font-feature-settings: "tnum";
+}
+
+/* Remove default scrollbar clutter */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

@@ -1,0 +1,35 @@
+# Dependency directories
+node_modules/
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+
+# Local env files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+backend/.env
+
+# User uploads
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Build and production outputs
+.next/
+out/
+build/
+dist/
+
+# IDE/OS files
+.DS_Store
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

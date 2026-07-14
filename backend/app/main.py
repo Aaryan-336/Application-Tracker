@@ -45,6 +45,29 @@ try:
             conn.execute(text("ALTER TABLE users ADD COLUMN apify_api_token VARCHAR(255) NULL"))
             conn.commit()
             print("Apify API Token migration completed.")
+
+        # Migrate new job API key columns
+        for col_name in ['jsearch_api_key', 'adzuna_app_id', 'adzuna_app_key']:
+            res_col = conn.execute(text(
+                f"SELECT column_name FROM information_schema.columns "
+                f"WHERE table_name='users' AND column_name='{col_name}'"
+            ))
+            if not res_col.fetchone():
+                print(f"Running inline database migration to add {col_name} to users table...")
+                conn.execute(text(f"ALTER TABLE users ADD COLUMN {col_name} VARCHAR(255) NULL"))
+                conn.commit()
+                print(f"{col_name} migration completed.")
+
+        # Migrate gmail_sync_enabled column
+        res_sync = conn.execute(text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name='users' AND column_name='gmail_sync_enabled'"
+        ))
+        if not res_sync.fetchone():
+            print("Running inline database migration to add gmail_sync_enabled to users table...")
+            conn.execute(text("ALTER TABLE users ADD COLUMN gmail_sync_enabled BOOLEAN DEFAULT FALSE"))
+            conn.commit()
+            print("gmail_sync_enabled migration completed.")
 except Exception as migration_err:
     print(f"Inline database migration log (SQLite or already migrated): {migration_err}")
 

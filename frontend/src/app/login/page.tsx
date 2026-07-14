@@ -20,7 +20,11 @@ export default function Login() {
 
     try {
       const data = await api.login(email, password);
-      localStorage.setItem("career_agent_token", data.access_token);
+      try {
+        localStorage.setItem("career_agent_token", data.access_token);
+      } catch (e) {
+        console.error("Storage access failed:", e);
+      }
       router.push("/dashboard");
     } catch (err: any) {
       setError(err.message || "Invalid credentials. Access Denied.");

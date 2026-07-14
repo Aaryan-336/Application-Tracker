@@ -17,6 +17,7 @@ class GmailStatusOut(BaseModel):
     is_connected: bool
     gmail_address: Optional[str] = None
     gmail_last_synced: Optional[str] = None
+    gmail_sync_enabled: Optional[bool] = False
 
 @router.post("/connect", status_code=status.HTTP_200_OK)
 def connect_gmail(
@@ -24,17 +25,40 @@ def connect_gmail(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    # Clean inputs (strip whitespace from email, remove spaces from App Password)
+    email_addr = credentials.gmail_address.strip() if credentials.gmail_address else ""
+    app_pwd = credentials.gmail_app_password.replace(" ", "").strip() if credentials.gmail_app_password else ""
+
+    # Allow disconnect (empty credentials)
+    if not email_addr and not app_pwd:
+        current_user.gmail_address = None
+        current_user.gmail_app_password = None
+        db.commit()
+        return {"message": "Gmail account disconnected."}
+
+    # Pre-validate App Password format before hitting IMAP
+    if len(app_pwd) != 16:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Invalid App Password: received {len(app_pwd)} characters, expected exactly 16. "
+                f"Google App Passwords are 16 lowercase letters (format: 'xxxx xxxx xxxx xxxx'). "
+                f"Do NOT enter your regular Gmail password. "
+                f"Generate an App Password at: https://myaccount.google.com/apppasswords"
+            )
+        )
+
     # Test IMAP connection
-    is_valid = gmail_service.test_connection(credentials.gmail_address, credentials.gmail_app_password)
+    is_valid, error_detail = gmail_service.test_connection(email_addr, app_pwd)
     if not is_valid:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Failed to connect to gmail. Please check your credentials and make sure you've enabled IMAP and generated a 16-character App Password."
+            detail=error_detail
         )
 
     # Save credentials
-    current_user.gmail_address = credentials.gmail_address
-    current_user.gmail_app_password = credentials.gmail_app_password
+    current_user.gmail_address = email_addr
+    current_user.gmail_app_password = app_pwd
     db.commit()
     db.refresh(current_user)
 
@@ -48,8 +72,24 @@ def get_gmail_status(current_user: User = Depends(get_current_user)):
     return GmailStatusOut(
         is_connected=is_connected,
         gmail_address=current_user.gmail_address,
-        gmail_last_synced=last_synced_str
+        gmail_last_synced=last_synced_str,
+        gmail_sync_enabled=bool(current_user.gmail_sync_enabled)
     )
+
+@router.post("/schedule", status_code=status.HTTP_200_OK)
+def toggle_gmail_schedule(
+    enabled: bool,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    current_user.gmail_sync_enabled = enabled
+    db.commit()
+    return {"message": f"Gmail daily schedule {'enabled' if enabled else 'disabled'}."}
+
+@router.post("/stop", status_code=status.HTTP_200_OK)
+def stop_gmail_sync(current_user: User = Depends(get_current_user)):
+    gmail_service.cancel_sync(current_user.id)
+    return {"message": "Gmail sync stop signal dispatched."}
 
 @router.post("/sync", status_code=status.HTTP_200_OK)
 async def sync_gmail(

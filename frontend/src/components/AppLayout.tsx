@@ -4,36 +4,69 @@ import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
-import { Loader2 } from "lucide-react";
+import { Loader2, Menu, X } from "lucide-react";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
+    const timeoutId = setTimeout(() => {
+      if (isMounted && loading) {
+        console.warn("Auth check timed out, falling back to login.");
+        try {
+          localStorage.removeItem("career_agent_token");
+        } catch (e) {}
+        router.push("/login");
+      }
+    }, 4000);
+
     async function verifyAuth() {
-      const token = localStorage.getItem("career_agent_token");
+      let token = null;
+      try {
+        token = localStorage.getItem("career_agent_token");
+      } catch (e) {
+        console.error("Storage access failed:", e);
+      }
       if (!token) {
+        clearTimeout(timeoutId);
         router.push("/login");
         return;
       }
       try {
         const userData = await api.getMe();
-        setUser(userData);
-        setLoading(false);
+        if (isMounted) {
+          setUser(userData);
+          setLoading(false);
+          clearTimeout(timeoutId);
+        }
       } catch (err) {
         console.error("Auth check failed:", err);
-        localStorage.removeItem("career_agent_token");
-        router.push("/login");
+        if (isMounted) {
+          try {
+            localStorage.removeItem("career_agent_token");
+          } catch (e) {}
+          clearTimeout(timeoutId);
+          router.push("/login");
+        }
       }
     }
     verifyAuth();
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+    };
   }, [router]);
 
   const handleLogout = () => {
-    localStorage.removeItem("career_agent_token");
+    try {
+      localStorage.removeItem("career_agent_token");
+    } catch (e) {}
     router.push("/");
   };
 
@@ -98,40 +131,93 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Mobile Top Header */}
       <header className="flex items-center justify-between border-b border-[#1e1e24] bg-[#09090b] px-6 py-4 md:hidden sticky top-0 z-40">
-        <div className="space-y-0.5">
+        <button
+          onClick={() => setMenuOpen(true)}
+          className="p-1 -ml-1 text-gray-400 hover:text-white transition-all focus:outline-none"
+          aria-label="Open Navigation Menu"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+
+        <div className="space-y-0.5 text-center flex-1">
           <span className="font-bold text-xs tracking-widest text-white font-mono">AGENT // CONSOLE</span>
         </div>
+
         <button
           onClick={handleLogout}
-          className="text-xs font-mono text-gray-500 hover:text-red-400"
+          className="text-xs font-mono text-gray-500 hover:text-red-400 transition-all"
         >
           [SHUTDOWN]
         </button>
       </header>
 
+      {/* Mobile Navigation Drawer Backdrop overlay */}
+      <div 
+        className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-50 md:hidden transition-opacity duration-300 ${
+          menuOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+        }`}
+        onClick={() => setMenuOpen(false)}
+      />
+
+      {/* Mobile Navigation Drawer Panel */}
+      <aside 
+        className={`fixed top-0 left-0 bottom-0 w-64 bg-[#09090b] border-r border-[#1e1e24] p-6 flex flex-col justify-between shrink-0 z-50 md:hidden transition-transform duration-300 ease-in-out ${
+          menuOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <div className="space-y-10">
+          <div className="flex items-center justify-between pb-4 border-b border-[#1e1e24]">
+            <div className="space-y-1">
+              <h1 className="font-bold text-sm tracking-widest text-white font-mono">AGENT // CONSOLE</h1>
+              <p className="text-[10px] text-gray-500 font-mono tracking-widest">SECURE DATA VAULT</p>
+            </div>
+            <button
+              onClick={() => setMenuOpen(false)}
+              className="p-1 -mr-1 text-gray-500 hover:text-white transition-all focus:outline-none"
+              aria-label="Close Navigation Menu"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          <nav className="space-y-1">
+            {navItems.map((item) => {
+              const isActive = pathname === item.href;
+              return (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  onClick={() => setMenuOpen(false)}
+                  className={`flex items-center gap-3.5 px-4 py-3 rounded text-xs font-mono tracking-wider transition-all ${
+                    isActive
+                      ? "bg-accent/10 border-l-2 border-accent text-accent font-bold"
+                      : "text-gray-400 border-l-2 border-transparent hover:bg-white/5 hover:text-white"
+                  }`}
+                >
+                  <span className="text-[10px] opacity-55">[{item.index}]</span>
+                  {item.name}
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
+
+        <button
+          onClick={() => {
+            setMenuOpen(false);
+            handleLogout();
+          }}
+          className="flex items-center gap-3.5 px-4 py-3 rounded text-xs font-mono tracking-wider text-gray-500 hover:text-red-400 hover:bg-red-500/5 transition-all text-left border-t border-[#1e1e24]"
+        >
+          <span>[x]</span>
+          SHUTDOWN SESSION
+        </button>
+      </aside>
+
       {/* Main Content Pane */}
-      <main className="flex-1 overflow-y-auto px-6 py-8 pb-24 md:pb-8 max-w-5xl mx-auto w-full">
+      <main className="flex-1 overflow-y-auto px-6 py-8 md:pb-8 max-w-5xl mx-auto w-full">
         {children}
       </main>
-
-      {/* Mobile Bottom Navigation Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 flex items-center justify-around border-t border-[#1e1e24] bg-[#09090b] px-2 py-2 md:hidden">
-        {navItems.map((item) => {
-          const isActive = pathname === item.href;
-          return (
-            <Link
-              key={item.name}
-              href={item.href}
-              className={`flex flex-col items-center gap-0.5 rounded px-3 py-2 transition-all ${
-                isActive ? "text-accent" : "text-gray-500 hover:text-white"
-              }`}
-            >
-              <span className="text-[9px] font-mono opacity-55">[{item.index}]</span>
-              <span className="text-[10px] font-bold font-mono tracking-wide">{item.name.replace("_FEED", "")}</span>
-            </Link>
-          );
-        })}
-      </nav>
     </div>
   );
 }

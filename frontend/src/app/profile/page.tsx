@@ -13,6 +13,9 @@ export default function Profile() {
     salary_expectation: 0,
     experience_level: "",
     apify_api_token: "",
+    jsearch_api_key: "",
+    adzuna_app_id: "",
+    adzuna_app_key: "",
   });
   const [resume, setResume] = useState<any>(null);
   const [uploading, setUploading] = useState(false);
@@ -35,6 +38,9 @@ export default function Profile() {
           salary_expectation: u.salary_expectation || 0,
           experience_level: u.experience_level || "",
           apify_api_token: u.apify_api_token || "",
+          jsearch_api_key: u.jsearch_api_key || "",
+          adzuna_app_id: u.adzuna_app_id || "",
+          adzuna_app_key: u.adzuna_app_key || "",
         });
 
         try {
@@ -99,6 +105,9 @@ export default function Profile() {
         salary_expectation: updated.salary_expectation || 0,
         experience_level: updated.experience_level || "",
         apify_api_token: updated.apify_api_token || "",
+        jsearch_api_key: updated.jsearch_api_key || "",
+        adzuna_app_id: updated.adzuna_app_id || "",
+        adzuna_app_key: updated.adzuna_app_key || "",
       });
       setSuccessMsg("SYSTEM: Profile preference structures updated.");
     } catch (err: any) {
@@ -295,6 +304,58 @@ export default function Profile() {
                   Optional: Supply your personal token to enable deep LinkedIn and Google job scrapers. Get your token under **Integrations** in your <a href="https://console.apify.com/account#/integrations" target="_blank" rel="noreferrer" className="text-accent underline font-semibold">Apify Console</a>.
                 </span>
               </div>
+
+              <div className="space-y-1.5 font-mono">
+                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                  JSEARCH_API_KEY <span className="text-accent">(RAPIDAPI)</span>
+                </label>
+                <input
+                  type="password"
+                  value={profile.jsearch_api_key || ""}
+                  onChange={(e) => setProfile({ ...profile, jsearch_api_key: e.target.value })}
+                  placeholder="e.g. a1b2c3d4e5f6g7h8i9j0..."
+                  className="w-full rounded bg-black/40 border border-border px-4 py-3 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-gray-500"
+                />
+                <span className="text-[10px] text-gray-500 block leading-relaxed mt-1">
+                  Optional: Enables JSearch — real jobs from LinkedIn, Indeed & Glassdoor with direct apply links. Get a free key (500 req/month) at{" "}
+                  <a href="https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch" target="_blank" rel="noreferrer" className="text-accent underline font-semibold">
+                    RapidAPI → JSearch
+                  </a>.
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 font-mono">
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                    ADZUNA_APP_ID
+                  </label>
+                  <input
+                    type="text"
+                    value={profile.adzuna_app_id || ""}
+                    onChange={(e) => setProfile({ ...profile, adzuna_app_id: e.target.value })}
+                    placeholder="e.g. abc12345"
+                    className="w-full rounded bg-black/40 border border-border px-4 py-3 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-gray-500"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                    ADZUNA_APP_KEY
+                  </label>
+                  <input
+                    type="password"
+                    value={profile.adzuna_app_key || ""}
+                    onChange={(e) => setProfile({ ...profile, adzuna_app_key: e.target.value })}
+                    placeholder="e.g. xyz789..."
+                    className="w-full rounded bg-black/40 border border-border px-4 py-3 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-gray-500"
+                  />
+                </div>
+              </div>
+              <span className="text-[10px] text-gray-500 block leading-relaxed font-mono">
+                Optional: Enables Adzuna — 250 free requests/day, jobs from 20+ countries. Get credentials at{" "}
+                <a href="https://developer.adzuna.com" target="_blank" rel="noreferrer" className="text-accent underline font-semibold">
+                  developer.adzuna.com
+                </a>.
+              </span>
 
               <button
                 type="submit"

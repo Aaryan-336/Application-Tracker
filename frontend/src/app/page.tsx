@@ -11,12 +11,32 @@ export default function Home() {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const token = localStorage.getItem("career_agent_token");
-      if (token) {
-        router.push("/dashboard");
-      } else {
+      let isMounted = true;
+      const timeoutId = setTimeout(() => {
+        if (isMounted) {
+          console.warn("Auth check routing fallback triggered.");
+          setCheckingAuth(false);
+        }
+      }, 3000);
+
+      try {
+        const token = localStorage.getItem("career_agent_token");
+        if (token) {
+          router.push("/dashboard");
+        } else {
+          setCheckingAuth(false);
+          clearTimeout(timeoutId);
+        }
+      } catch (e) {
+        console.error("Storage access failed:", e);
         setCheckingAuth(false);
+        clearTimeout(timeoutId);
       }
+
+      return () => {
+        isMounted = false;
+        clearTimeout(timeoutId);
+      };
     }
   }, [router]);
 

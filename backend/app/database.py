@@ -3,9 +3,12 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 from app.config import settings
 
 # Create engine
+db_url = settings.DATABASE_URL
+if db_url.startswith("postgres://"):
+    db_url = db_url.replace("postgres://", "postgresql://", 1)
+
 engine = create_engine(
-    settings.DATABASE_URL,
-    # For PostgreSQL, no special connect_args are needed like in SQLite
+    db_url
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

@@ -18,10 +18,10 @@ export default function Jobs() {
   const [limit, setLimit] = useState(10);
   const [useMock, setUseMock] = useState(false);
   const [sources, setSources] = useState({
-    weworkremotely: true,
-    yc: true,
-    internshala: true,
-    web: true
+    remotive: true,
+    themuse: true,
+    jsearch: false,
+    adzuna: false
   });
   
   // Scraping status states
@@ -83,15 +83,15 @@ export default function Jobs() {
     if (useMock) {
       addLog("Mock parameter active. Injecting sandbox jobs...");
     } else {
-      addLog(`Selected crawler nodes: [${activeSources.toUpperCase()}]`);
-      addLog("Activating Playwright headless crawler clusters...");
+      addLog(`Selected API sources: [${activeSources.toUpperCase()}]`);
+      addLog("Querying job APIs for matching listings...");
       await new Promise((r) => setTimeout(r, 800));
-      addLog("Parsing target DOM architectures & resolving redirects...");
+      addLog("Fetching real listings with direct apply URLs...")
     }
 
     try {
       const response = await api.triggerDiscovery(query, location, limit, activeSources, useMock);
-      addLog(`Crawler finished. Synced database matching structures.`);
+      addLog(`API fetch finished. Synced database matching structures.`);
       addLog(`Status: ${response.message}. Discovered ${response.new_jobs_discovered} new jobs.`);
       addLog("Starting AI matching algorithms with stored resumes...");
       await new Promise((r) => setTimeout(r, 700));
@@ -101,7 +101,7 @@ export default function Jobs() {
       await loadMatches();
       setTimeout(() => setActionMsg(""), 4000);
     } catch (err: any) {
-      addLog(`CRITICAL ERROR: Discovery engine failure: ${err.message}`);
+      addLog(`ERROR: Discovery engine failure: ${err.message}`);
     } finally {
       setScraping(false);
     }
@@ -169,7 +169,7 @@ export default function Jobs() {
           <div className="console-panel p-6 rounded space-y-6 animate-fadeIn">
             <h3 className="text-xs font-bold text-white font-mono uppercase tracking-widest flex items-center gap-2">
               <Search className="h-4 w-4 text-accent" />
-              Web Crawler Settings
+              Job Discovery Settings
             </h3>
             
             <form onSubmit={handleRunScraper} className="grid grid-cols-1 md:grid-cols-2 gap-6 font-mono text-xs">
@@ -212,46 +212,49 @@ export default function Jobs() {
               </div>
 
               <div className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-gray-400 font-bold uppercase block mb-1">Target Crawl Nodes</label>
+                  <div className="space-y-2">
+                  <label className="text-gray-400 font-bold uppercase block mb-1">Target Sources</label>
                   <div className="grid grid-cols-2 gap-3 text-[11px]">
                     <label className="flex items-center gap-2 cursor-pointer select-none">
                       <input
                         type="checkbox"
-                        checked={sources.weworkremotely}
-                        onChange={() => toggleSource("weworkremotely")}
+                        checked={sources.remotive}
+                        onChange={() => toggleSource("remotive")}
                         className="accent-accent"
                       />
-                      WeWorkRemotely
+                      <span>Remotive <span className="text-success text-[9px]">(FREE)</span></span>
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer select-none">
                       <input
                         type="checkbox"
-                        checked={sources.yc}
-                        onChange={() => toggleSource("yc")}
+                        checked={sources.themuse}
+                        onChange={() => toggleSource("themuse")}
                         className="accent-accent"
                       />
-                      YCombinator
+                      <span>The Muse <span className="text-success text-[9px]">(FREE)</span></span>
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer select-none">
                       <input
                         type="checkbox"
-                        checked={sources.internshala}
-                        onChange={() => toggleSource("internshala")}
+                        checked={sources.jsearch}
+                        onChange={() => toggleSource("jsearch")}
                         className="accent-accent"
                       />
-                      Internshala
+                      <span>JSearch <span className="text-gray-500 text-[9px]">(API Key)</span></span>
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer select-none">
                       <input
                         type="checkbox"
-                        checked={sources.web}
-                        onChange={() => toggleSource("web")}
+                        checked={sources.adzuna}
+                        onChange={() => toggleSource("adzuna")}
                         className="accent-accent"
                       />
-                      General Web Search
+                      <span>Adzuna <span className="text-gray-500 text-[9px]">(API Key)</span></span>
                     </label>
                   </div>
+                  <span className="text-[9px] text-gray-500 block mt-1 leading-relaxed">
+                    Remotive & The Muse are free and require no API key. JSearch & Adzuna require keys — configure them in your Profile.
+                  </span>
                 </div>
 
                 <div className="pt-2">

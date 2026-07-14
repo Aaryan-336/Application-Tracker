@@ -38,7 +38,11 @@ export default function Register() {
       setTimeout(async () => {
         try {
           const authData = await api.login(email, password);
-          localStorage.setItem("career_agent_token", authData.access_token);
+          try {
+            localStorage.setItem("career_agent_token", authData.access_token);
+          } catch (e) {
+            console.error("Storage access failed:", e);
+          }
           router.push("/profile?onboarding=true");
         } catch {
           router.push("/login");

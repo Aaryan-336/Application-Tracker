@@ -95,6 +95,9 @@ async def trigger_job_discovery(
         limit=limit,
         sources=sources_list,
         use_mock=use_mock,
-        apify_api_token=current_user.apify_api_token
+        apify_api_token=current_user.apify_api_token,
+        jsearch_api_key=current_user.jsearch_api_key,
+        adzuna_app_id=current_user.adzuna_app_id,
+        adzuna_app_key=current_user.adzuna_app_key
     )
     return {"message": "Job discovery completed successfully", "new_jobs_discovered": new_jobs}

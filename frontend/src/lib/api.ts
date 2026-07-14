@@ -1,4 +1,17 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+const getApiBaseUrl = () => {
+    if (process.env.NEXT_PUBLIC_API_URL) {
+        return process.env.NEXT_PUBLIC_API_URL;
+    }
+    if (typeof window !== "undefined") {
+        const hostname = window.location.hostname;
+        if (hostname && hostname !== "localhost" && hostname !== "127.0.0.1") {
+            return `http://${hostname}:8000/api`;
+        }
+    }
+    return "http://localhost:8000/api";
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 function getHeaders(isMultipart = false) {
     const headers: Record<string, string> = {};
@@ -6,9 +19,13 @@ function getHeaders(isMultipart = false) {
         headers["Content-Type"] = "application/json";
     }
     if (typeof window !== "undefined") {
-        const token = localStorage.getItem("career_agent_token");
-        if (token) {
-            headers["Authorization"] = `Bearer ${token}`;
+        try {
+            const token = localStorage.getItem("career_agent_token");
+            if (token) {
+                headers["Authorization"] = `Bearer ${token}`;
+            }
+        } catch (e) {
+            console.warn("Storage access failed:", e);
         }
     }
     return headers;
@@ -64,6 +81,11 @@ export const api = {
             preferred_roles?: string[];
             preferred_locations?: string[];
             salary_expectation?: number;
+            experience_level?: string;
+            apify_api_token?: string;
+            jsearch_api_key?: string;
+            adzuna_app_id?: string;
+            adzuna_app_key?: string;
         }>("/auth/me"),
 
     updateProfile: (profile: {
@@ -154,6 +176,7 @@ export const api = {
             is_connected: boolean;
             gmail_address?: string;
             gmail_last_synced?: string;
+            gmail_sync_enabled?: boolean;
         }>("/gmail/status"),
 
     syncGmail: (daysBack = 14) =>
@@ -162,6 +185,16 @@ export const api = {
             updates_count: number;
             updates: any[];
         }>(`/gmail/sync?days_back=${daysBack}`, {
+            method: "POST",
+        }),
+
+    stopGmailSync: () =>
+        request<any>("/gmail/stop", {
+            method: "POST",
+        }),
+
+    toggleGmailSchedule: (enabled: boolean) =>
+        request<any>(`/gmail/schedule?enabled=${enabled}`, {
             method: "POST",
         }),
 

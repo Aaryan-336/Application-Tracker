@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, DateTime, Integer, JSON
+from sqlalchemy import Column, String, DateTime, Integer, JSON, Boolean
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -19,8 +19,12 @@ class User(Base):
     gmail_address = Column(String, nullable=True)
     gmail_app_password = Column(String, nullable=True)
     gmail_last_synced = Column(DateTime, nullable=True)
+    gmail_sync_enabled = Column(Boolean, default=False, nullable=True)
     experience_level = Column(String, nullable=True)
     apify_api_token = Column(String, nullable=True)
+    jsearch_api_key = Column(String, nullable=True)
+    adzuna_app_id = Column(String, nullable=True)
+    adzuna_app_key = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

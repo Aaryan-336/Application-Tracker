@@ -12,6 +12,12 @@ from app.models.user_job import UserJob
 from app.services.groq_service import groq_service
 
 class GmailService:
+    def __init__(self):
+        self.active_cancels = set()
+
+    def cancel_sync(self, user_id):
+        self.active_cancels.add(str(user_id))
+
     def parse_body(self, msg) -> str:
         body = ""
         if msg.is_multipart():
@@ -55,27 +61,68 @@ class GmailService:
                 parts.append(str(text))
         return "".join(parts)
 
-    def test_connection(self, email_address: str, app_password: str) -> bool:
+    def test_connection(self, email_address: str, app_password: str) -> tuple[bool, str]:
         try:
             # Connect to Gmail IMAP
+            clean_email = email_address.strip() if email_address else ""
+            clean_pwd = app_password.replace(" ", "").strip() if app_password else ""
+            
+            # Validate App Password format (Google App Passwords are always 16 lowercase letters)
+            if not clean_pwd:
+                return False, "App Password is empty. Please generate a 16-character App Password from your Google Account security settings."
+            
+            pwd_len = len(clean_pwd)
+            print(f"[Gmail Auth] Attempting login for {clean_email}, password length after cleanup: {pwd_len} chars")
+            
+            if pwd_len != 16:
+                return False, (
+                    f"Invalid App Password format: received {pwd_len} characters, expected exactly 16. "
+                    f"Google App Passwords are 16 lowercase letters (e.g., 'abcdefghijklmnop'). "
+                    f"Do NOT use your regular Gmail password — it will be rejected. "
+                    f"Generate an App Password at: https://myaccount.google.com/apppasswords"
+                )
+            
+            if not clean_pwd.isalpha():
+                return False, (
+                    "Invalid App Password format: App Passwords contain only letters (no numbers or special characters). "
+                    "It appears you may be using your regular Gmail password. "
+                    "Generate an App Password at: https://myaccount.google.com/apppasswords"
+                )
+            
             mail = imaplib.IMAP4_SSL("imap.gmail.com", 993)
-            mail.login(email_address, app_password)
+            mail.login(clean_email, clean_pwd)
             mail.logout()
-            return True
+            return True, "Success"
+        except imaplib.IMAP4.error as auth_err:
+            error_msg = str(auth_err)
+            print(f"Gmail authentication failed: {error_msg}")
+            if "AUTHENTICATIONFAILED" in error_msg:
+                return False, (
+                    "Authentication failed. Possible causes:\n"
+                    "1. The App Password is incorrect — regenerate it at https://myaccount.google.com/apppasswords\n"
+                    "2. 2-Step Verification is not enabled — enable it first in Google Account > Security\n"
+                    "3. The Gmail address is incorrect\n"
+                    "4. IMAP access is disabled — enable it in Gmail Settings > Forwarding and POP/IMAP"
+                )
+            return False, f"IMAP authentication error: {error_msg}"
         except Exception as e:
-            print(f"Gmail connection test failed: {e}")
-            return False
+            error_msg = str(e)
+            print(f"Gmail connection error: {error_msg}")
+            return False, f"Network or connection error: {error_msg}. Check if your network blocks port 993 or if SSL is supported."
 
     async def sync_user_emails(self, db: Session, user: User, days_back: int = 14) -> List[Dict[str, Any]]:
         if not user.gmail_address or not user.gmail_app_password:
             raise ValueError("Gmail configuration is missing credentials.")
+
+        clean_email = user.gmail_address.strip()
+        clean_pwd = user.gmail_app_password.replace(" ", "").strip()
 
         updates_found = []
         mail = None
         try:
             # 1. Connect and login
             mail = imaplib.IMAP4_SSL("imap.gmail.com", 993)
-            mail.login(user.gmail_address, user.gmail_app_password)
+            mail.login(clean_email, clean_pwd)
             mail.select("INBOX")
 
             # Calculate date filter (e.g. SINCE 01-Jul-2026)
@@ -101,6 +148,12 @@ class GmailService:
 
             # Process in reverse (newest first)
             for msg_id in reversed(message_ids):
+                # Check for cancellation
+                if str(user.id) in self.active_cancels:
+                    print(f"Gmail sync cancelled for user {user.email}")
+                    self.active_cancels.remove(str(user.id))
+                    break
+
                 # Fetch header first to filter quickly
                 res, data = mail.fetch(msg_id, "(RFC822.HEADER)")
                 if res != "OK":

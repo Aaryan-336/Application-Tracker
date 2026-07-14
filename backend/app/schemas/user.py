@@ -20,6 +20,10 @@ class UserUpdate(BaseModel):
     auto_apply: Optional[bool] = None
     experience_level: Optional[str] = None
     apify_api_token: Optional[str] = None
+    jsearch_api_key: Optional[str] = None
+    adzuna_app_id: Optional[str] = None
+    adzuna_app_key: Optional[str] = None
+    gmail_sync_enabled: Optional[bool] = None
 
 class UserResponse(UserBase):
     id: UUID
@@ -29,6 +33,10 @@ class UserResponse(UserBase):
     salary_expectation: Optional[int]
     experience_level: Optional[str] = None
     apify_api_token: Optional[str] = None
+    jsearch_api_key: Optional[str] = None
+    adzuna_app_id: Optional[str] = None
+    adzuna_app_key: Optional[str] = None
+    gmail_sync_enabled: Optional[bool] = False
     created_at: datetime
     updated_at: datetime
 

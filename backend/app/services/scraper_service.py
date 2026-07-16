@@ -146,21 +146,63 @@ class ScraperService:
     # ─── Helper: keyword match check ──────────────────────────────────────
     @staticmethod
     def _matches_query(query: str, *fields: str) -> bool:
-        """Return True if query is empty OR any field contains the query (case-insensitive)."""
+        """
+        Smart keyword matching:
+        1. If no query, match everything.
+        2. Split query into words (longer than 2 characters).
+        3. Match if any query word is in the first field (usually job title)
+           OR if all query words are present in the combined text of all fields.
+        """
         if not query:
             return True
-        q = query.lower()
-        return any(q in (f or "").lower() for f in fields)
+            
+        query_words = [w.strip().lower() for w in query.split() if len(w.strip()) > 2]
+        if not query_words:
+            return True
+            
+        # Combine all fields
+        combined = " ".join((f or "") for f in fields).lower()
+        
+        # Check if any query word is in the first field (usually title)
+        first_field = (fields[0] or "").lower() if fields else ""
+        if any(w in first_field for w in query_words):
+            return True
+            
+        # Otherwise, check if all query words are present in combined text
+        return all(w in combined for w in query_words)
 
     @staticmethod
     def _matches_location(location: str, job_location: str) -> bool:
-        """Return True if location filter is empty, 'remote', or is found in job_location."""
+        """
+        Smart location matching:
+        1. If location is empty or 'remote', match everything.
+        2. If job is remote/worldwide/anywhere/global, match any location.
+        3. Simple substring check.
+        4. If searching for an Indian city, match country-wide 'India' jobs.
+        """
         if not location:
             return True
+        
         loc_lower = location.lower()
         if loc_lower == "remote":
             return True  # accept all when user wants remote
-        return loc_lower in (job_location or "").lower()
+            
+        job_loc_lower = (job_location or "").lower()
+        
+        # 1. If job is remote/worldwide/anywhere/global, it matches any search
+        if any(w in job_loc_lower for w in ["worldwide", "remote", "anywhere", "global"]):
+            return True
+            
+        # 2. Substring match
+        if loc_lower in job_loc_lower:
+            return True
+            
+        # 3. Country-wide matching for India
+        is_search_in_india = loc_lower == "india" or any(kw in loc_lower for kw in INDIA_LOCATION_KEYWORDS)
+        if is_search_in_india and "india" in job_loc_lower:
+            return True
+            
+        return False
 
     @staticmethod
     def _clean_html(text: str, max_len: int = 2000) -> str:

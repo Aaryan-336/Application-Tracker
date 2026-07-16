@@ -15,13 +15,19 @@ export default function Jobs() {
   const [showConfig, setShowConfig] = useState(false);
   const [query, setQuery] = useState("Software Engineer");
   const [location, setLocation] = useState("Remote");
-  const [limit, setLimit] = useState(10);
+  const [limit, setLimit] = useState(25);
   const [useMock, setUseMock] = useState(false);
   const [sources, setSources] = useState({
     remotive: true,
     themuse: true,
+    remoteok: true,
+    arbeitnow: true,
+    himalayas: true,
+    greenhouse: true,
+    lever: true,
     jsearch: false,
-    adzuna: false
+    adzuna: false,
+    apify: false
   });
   
   // Scraping status states
@@ -199,65 +205,131 @@ export default function Jobs() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-gray-400 font-bold uppercase">Listing Scrape Limit ({limit})</label>
-                  <input
-                    type="range"
-                    min="1"
-                    max="30"
-                    value={limit}
-                    onChange={(e) => setLimit(parseInt(e.target.value))}
-                    className="w-full accent-accent"
-                  />
+                  <label className="text-gray-400 font-bold uppercase">Listing Limit</label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="range"
+                      min="5"
+                      max="100"
+                      step="5"
+                      value={limit}
+                      onChange={(e) => setLimit(parseInt(e.target.value))}
+                      className="flex-1 accent-accent"
+                    />
+                    <input
+                      type="number"
+                      min="1"
+                      max="100"
+                      value={limit}
+                      onChange={(e) => {
+                        const v = parseInt(e.target.value);
+                        if (!isNaN(v) && v >= 1 && v <= 100) setLimit(v);
+                      }}
+                      className="w-16 bg-[#050505] border border-border focus:border-accent p-2 rounded text-white text-center focus:outline-none"
+                    />
+                  </div>
                 </div>
               </div>
 
               <div className="space-y-4">
-                  <div className="space-y-2">
-                  <label className="text-gray-400 font-bold uppercase block mb-1">Target Sources</label>
-                  <div className="grid grid-cols-2 gap-3 text-[11px]">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-gray-400 font-bold uppercase">Target Sources</label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSources((prev: any) => {
+                          const next = { ...prev };
+                          ["remotive","themuse","remoteok","arbeitnow","himalayas","greenhouse","lever"].forEach(k => next[k] = true);
+                          return next;
+                        })}
+                        className="text-[9px] text-accent hover:underline font-bold"
+                      >
+                        ALL_FREE
+                      </button>
+                      <span className="text-gray-600">|</span>
+                      <button
+                        type="button"
+                        onClick={() => setSources((prev: any) => {
+                          const next = { ...prev };
+                          Object.keys(next).forEach(k => next[k] = true);
+                          return next;
+                        })}
+                        className="text-[9px] text-accent hover:underline font-bold"
+                      >
+                        ALL
+                      </button>
+                      <span className="text-gray-600">|</span>
+                      <button
+                        type="button"
+                        onClick={() => setSources((prev: any) => {
+                          const next = { ...prev };
+                          Object.keys(next).forEach(k => next[k] = false);
+                          return next;
+                        })}
+                        className="text-[9px] text-gray-500 hover:underline font-bold"
+                      >
+                        NONE
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Free sources */}
+                  <span className="text-[9px] text-success font-bold uppercase block tracking-wider">Free — No API Key</span>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px]">
                     <label className="flex items-center gap-2 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={sources.remotive}
-                        onChange={() => toggleSource("remotive")}
-                        className="accent-accent"
-                      />
-                      <span>Remotive <span className="text-success text-[9px]">(FREE)</span></span>
+                      <input type="checkbox" checked={sources.remotive} onChange={() => toggleSource("remotive")} className="accent-accent" />
+                      <span>Remotive</span>
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={sources.themuse}
-                        onChange={() => toggleSource("themuse")}
-                        className="accent-accent"
-                      />
-                      <span>The Muse <span className="text-success text-[9px]">(FREE)</span></span>
+                      <input type="checkbox" checked={sources.themuse} onChange={() => toggleSource("themuse")} className="accent-accent" />
+                      <span>The Muse</span>
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={sources.jsearch}
-                        onChange={() => toggleSource("jsearch")}
-                        className="accent-accent"
-                      />
-                      <span>JSearch <span className="text-gray-500 text-[9px]">(API Key)</span></span>
+                      <input type="checkbox" checked={sources.remoteok} onChange={() => toggleSource("remoteok")} className="accent-accent" />
+                      <span>RemoteOK</span>
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={sources.adzuna}
-                        onChange={() => toggleSource("adzuna")}
-                        className="accent-accent"
-                      />
-                      <span>Adzuna <span className="text-gray-500 text-[9px]">(API Key)</span></span>
+                      <input type="checkbox" checked={sources.arbeitnow} onChange={() => toggleSource("arbeitnow")} className="accent-accent" />
+                      <span>Arbeitnow</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input type="checkbox" checked={sources.himalayas} onChange={() => toggleSource("himalayas")} className="accent-accent" />
+                      <span>Himalayas</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input type="checkbox" checked={sources.greenhouse} onChange={() => toggleSource("greenhouse")} className="accent-accent" />
+                      <span>Greenhouse</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input type="checkbox" checked={sources.lever} onChange={() => toggleSource("lever")} className="accent-accent" />
+                      <span>Lever</span>
                     </label>
                   </div>
-                  <span className="text-[9px] text-gray-500 block mt-1 leading-relaxed">
-                    Remotive & The Muse are free and require no API key. JSearch & Adzuna require keys — configure them in your Profile.
+
+                  {/* API key sources */}
+                  <span className="text-[9px] text-gray-500 font-bold uppercase block tracking-wider mt-3">API Key Required — Configure in Profile</span>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px]">
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input type="checkbox" checked={sources.jsearch} onChange={() => toggleSource("jsearch")} className="accent-accent" />
+                      <span>JSearch <span className="text-[8px] text-gray-500">(LinkedIn/Indeed/Naukri)</span></span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input type="checkbox" checked={sources.adzuna} onChange={() => toggleSource("adzuna")} className="accent-accent" />
+                      <span>Adzuna <span className="text-[8px] text-gray-500">(India auto-detect)</span></span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input type="checkbox" checked={sources.apify} onChange={() => toggleSource("apify")} className="accent-accent" />
+                      <span>Apify <span className="text-[8px] text-gray-500">(Naukri/Internshala)</span></span>
+                    </label>
+                  </div>
+
+                  <span className="text-[9px] text-gray-500 block mt-2 leading-relaxed">
+                    Greenhouse &amp; Lever query 45+ top company boards (Razorpay, Stripe, Swiggy, OpenAI, PhonePe…). JSearch covers LinkedIn, Indeed, Naukri &amp; Glassdoor via Google Jobs.
                   </span>
                 </div>
 
-                <div className="pt-2">
+                <div className="pt-1">
                   <label className="flex items-center gap-2 cursor-pointer select-none font-bold text-gray-400 uppercase">
                     <input
                       type="checkbox"
@@ -267,9 +339,6 @@ export default function Jobs() {
                     />
                     [DEBUG] Use Mock Sandbox Data
                   </label>
-                  <span className="text-[10px] text-gray-500 block mt-1 leading-relaxed">
-                    Select sandbox mode to inject local developer listings and bypass real network scraping times.
-                  </span>
                 </div>
 
                 <button

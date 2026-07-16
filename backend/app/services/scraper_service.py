@@ -1,6 +1,7 @@
 import asyncio
 import uuid
 import json
+import re
 import urllib.parse
 import urllib.request
 from datetime import datetime
@@ -14,10 +15,75 @@ from app.services.matching_service import matching_service
 from app.config import settings
 
 
+# ─── Curated company board tokens ────────────────────────────────────────────
+# Greenhouse Boards API: https://boards-api.greenhouse.io/v1/boards/{token}/jobs
+GREENHOUSE_BOARDS = {
+    # Global tech
+    "stripe": "Stripe",
+    "figma": "Figma",
+    "notion": "Notion",
+    "coinbase": "Coinbase",
+    "discord": "Discord",
+    "databricks": "Databricks",
+    "ramp": "Ramp",
+    "openai": "OpenAI",
+    "anthropic": "Anthropic",
+    "vercel": "Vercel",
+    "canva": "Canva",
+    "gitlab": "GitLab",
+    "airtable": "Airtable",
+    "plaid": "Plaid",
+    # India tech
+    "razorpay": "Razorpay",
+    "cred": "CRED",
+    "zerodha": "Zerodha",
+    "meesho": "Meesho",
+    "postman": "Postman",
+    "browserstack": "BrowserStack",
+    "hasura": "Hasura",
+    "zomato": "Zomato",
+    "groww": "Groww",
+    "phonepe": "PhonePe",
+    "dream11": "Dream11",
+    "freshworks": "Freshworks",
+    "chargebee": "Chargebee",
+    "clevertap": "CleverTap",
+    "unacademy": "Unacademy",
+}
+
+# Lever Postings API: https://api.lever.co/v0/postings/{slug}?mode=json
+LEVER_BOARDS = {
+    # Global tech
+    "netflix": "Netflix",
+    "atlassian": "Atlassian",
+    "twitch": "Twitch",
+    "nerdwallet": "NerdWallet",
+    "GoCardless": "GoCardless",
+    "samsara": "Samsara",
+    "relativity": "Relativity",
+    # India tech
+    "swiggy": "Swiggy",
+    "curefit": "CureFit",
+    "urbancompany": "Urban Company",
+    "lenskart": "Lenskart",
+    "leadsquared": "LeadSquared",
+    "druva": "Druva",
+    "moengage": "MoEngage",
+}
+
+# India location keywords for Adzuna country auto-detection
+INDIA_LOCATION_KEYWORDS = [
+    "india", "bangalore", "bengaluru", "mumbai", "delhi", "hyderabad",
+    "chennai", "pune", "kolkata", "ahmedabad", "gurugram", "gurgaon",
+    "noida", "jaipur", "chandigarh", "kochi", "indore", "lucknow",
+    "coimbatore", "thiruvananthapuram", "nagpur", "surat", "vadodara",
+]
+
+
 class ScraperService:
     """
-    Job discovery service that uses structured APIs instead of fragile web scraping.
-    All sources return real direct-apply URLs.
+    Job discovery service that aggregates listings from multiple free and
+    API-key-based sources. All sources return real direct-apply URLs.
     """
 
     def __init__(self):
@@ -48,6 +114,7 @@ class ScraperService:
             }
         ]
 
+    # ─── HTTP helpers ─────────────────────────────────────────────────────
     def _http_get_json(self, url: str, headers: Optional[Dict[str, str]] = None, timeout: int = 20) -> Any:
         """Synchronous HTTP GET that returns parsed JSON. Used inside asyncio.to_thread."""
         req = urllib.request.Request(url)
@@ -72,68 +139,42 @@ class ScraperService:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode("utf-8"))
 
-    # ─── JSearch API (RapidAPI) ───────────────────────────────────────────
-    # Free tier: 500 requests/month
-    # Returns real jobs from LinkedIn, Indeed, Glassdoor with direct apply links
-    async def fetch_jsearch_jobs(self, query: str = "", location: str = "Remote", limit: int = 5, api_key: str = "") -> List[Dict[str, Any]]:
-        key = api_key or settings.JSEARCH_API_KEY
-        if not key:
-            print("[JSearch] No API key configured, skipping.")
-            return []
+    # ─── Helper: keyword match check ──────────────────────────────────────
+    @staticmethod
+    def _matches_query(query: str, *fields: str) -> bool:
+        """Return True if query is empty OR any field contains the query (case-insensitive)."""
+        if not query:
+            return True
+        q = query.lower()
+        return any(q in (f or "").lower() for f in fields)
 
-        jobs = []
-        try:
-            search_query = f"{query} in {location}" if location else query
-            url = (
-                f"https://jsearch.p.rapidapi.com/search?"
-                f"query={urllib.parse.quote(search_query)}"
-                f"&num_pages=1"
-                f"&page=1"
-            )
-            headers = {
-                "X-RapidAPI-Key": key,
-                "X-RapidAPI-Host": "jsearch.p.rapidapi.com"
-            }
+    @staticmethod
+    def _matches_location(location: str, job_location: str) -> bool:
+        """Return True if location filter is empty, 'remote', or is found in job_location."""
+        if not location:
+            return True
+        loc_lower = location.lower()
+        if loc_lower == "remote":
+            return True  # accept all when user wants remote
+        return loc_lower in (job_location or "").lower()
 
-            print(f"[JSearch] Fetching jobs for '{search_query}'...")
-            data = await asyncio.to_thread(self._http_get_json, url, headers)
+    @staticmethod
+    def _clean_html(text: str, max_len: int = 2000) -> str:
+        """Strip HTML tags and collapse whitespace."""
+        text = re.sub(r"<[^>]+>", " ", text)
+        text = re.sub(r"\s+", " ", text).strip()
+        return text[:max_len]
 
-            results = data.get("data", [])
-            count = 0
-            for item in results:
-                if count >= limit:
-                    break
-
-                title = item.get("job_title", "")
-                company = item.get("employer_name", "Unknown Company")
-                loc = item.get("job_city", "") or item.get("job_state", "") or item.get("job_country", location)
-                if item.get("job_is_remote"):
-                    loc = f"Remote — {loc}" if loc else "Remote"
-                desc = item.get("job_description", "")[:2000]
-                apply_url = item.get("job_apply_link") or item.get("job_google_link", "")
-
-                if title and apply_url:
-                    jobs.append({
-                        "title": title.strip(),
-                        "company": company.strip(),
-                        "location": loc.strip() if loc else "Not specified",
-                        "description": desc.strip() or f"Job listing for {title} at {company}.",
-                        "url": apply_url.strip(),
-                        "source": "JSearch"
-                    })
-                    count += 1
-
-            print(f"[JSearch] Found {len(jobs)} jobs.")
-        except Exception as e:
-            print(f"[JSearch] API request failed: {e}")
-        return jobs
+    # ═══════════════════════════════════════════════════════════════════════
+    #  FREE SOURCES (no API key required)
+    # ═══════════════════════════════════════════════════════════════════════
 
     # ─── Remotive API ─────────────────────────────────────────────────────
     # Free, no API key needed, remote-only tech jobs
-    async def fetch_remotive_jobs(self, query: str = "", limit: int = 5) -> List[Dict[str, Any]]:
+    async def fetch_remotive_jobs(self, query: str = "", location: str = "", limit: int = 10) -> List[Dict[str, Any]]:
         jobs = []
         try:
-            url = f"https://remotive.com/api/remote-jobs?search={urllib.parse.quote(query)}&limit={limit * 2}"
+            url = f"https://remotive.com/api/remote-jobs?search={urllib.parse.quote(query)}&limit={limit * 3}"
             print(f"[Remotive] Fetching remote jobs for '{query}'...")
             data = await asyncio.to_thread(self._http_get_json, url)
 
@@ -146,11 +187,12 @@ class ScraperService:
                 title = item.get("title", "")
                 company = item.get("company_name", "Unknown Company")
                 loc = item.get("candidate_required_location", "Remote")
-                desc = item.get("description", "")[:2000]
+                desc = self._clean_html(item.get("description", ""))
                 apply_url = item.get("url", "")
 
-                # Filter by query keyword if the API returned too broadly
-                if query and query.lower() not in title.lower() and query.lower() not in (desc or "").lower():
+                if not self._matches_location(location, loc):
+                    continue
+                if not self._matches_query(query, title, desc):
                     continue
 
                 if title and apply_url:
@@ -158,7 +200,7 @@ class ScraperService:
                         "title": title.strip(),
                         "company": company.strip(),
                         "location": loc.strip() if loc else "Remote",
-                        "description": desc.strip() or f"Remote job listing for {title} at {company}.",
+                        "description": desc or f"Remote job listing for {title} at {company}.",
                         "url": apply_url.strip(),
                         "source": "Remotive"
                     })
@@ -171,20 +213,18 @@ class ScraperService:
 
     # ─── The Muse API ─────────────────────────────────────────────────────
     # Free, no API key needed, curated tech jobs
-    async def fetch_themuse_jobs(self, query: str = "", location: str = "Remote", limit: int = 5) -> List[Dict[str, Any]]:
+    async def fetch_themuse_jobs(self, query: str = "", location: str = "Remote", limit: int = 10) -> List[Dict[str, Any]]:
         jobs = []
         try:
-            # The Muse supports category and location filtering
-            params = f"page=1&descending=true"
+            params = "page=1&descending=true"
             if location and location.lower() == "remote":
                 params += "&location=Flexible%20/%20Remote"
             elif location:
                 params += f"&location={urllib.parse.quote(location)}"
-            # The Muse categories for tech
             params += "&category=Software%20Engineering"
 
             url = f"https://www.themuse.com/api/public/jobs?{params}"
-            print(f"[The Muse] Fetching jobs...")
+            print(f"[The Muse] Fetching jobs for '{query}' in '{location}'...")
             data = await asyncio.to_thread(self._http_get_json, url)
 
             results = data.get("results", [])
@@ -196,21 +236,16 @@ class ScraperService:
                 title = item.get("name", "")
                 company_data = item.get("company", {})
                 company = company_data.get("name", "Unknown Company") if isinstance(company_data, dict) else "Unknown Company"
-                
+
                 locations_list = item.get("locations", [])
                 loc = ", ".join(l.get("name", "") for l in locations_list) if locations_list else location
-                
-                desc_parts = item.get("contents", "")
-                # Strip HTML tags from description
-                import re
-                desc = re.sub(r"<[^>]+>", " ", desc_parts)
-                desc = re.sub(r"\s+", " ", desc).strip()[:2000]
+
+                desc = self._clean_html(item.get("contents", ""))
 
                 refs = item.get("refs", {})
                 apply_url = refs.get("landing_page", "") if isinstance(refs, dict) else ""
 
-                # Filter by query keyword
-                if query and query.lower() not in title.lower() and query.lower() not in desc.lower():
+                if not self._matches_query(query, title, desc):
                     continue
 
                 if title and apply_url:
@@ -229,9 +264,338 @@ class ScraperService:
             print(f"[The Muse] API request failed: {e}")
         return jobs
 
+    # ─── RemoteOK API ─────────────────────────────────────────────────────
+    # Free, no API key needed, remote tech jobs JSON feed
+    async def fetch_remoteok_jobs(self, query: str = "", limit: int = 10) -> List[Dict[str, Any]]:
+        jobs = []
+        try:
+            url = "https://remoteok.com/api"
+            print(f"[RemoteOK] Fetching remote jobs for '{query}'...")
+            data = await asyncio.to_thread(self._http_get_json, url)
+
+            # First item is metadata/legal notice — skip it
+            results = data[1:] if isinstance(data, list) and len(data) > 1 else []
+            count = 0
+            for item in results:
+                if count >= limit:
+                    break
+
+                title = item.get("position", "")
+                company = item.get("company", "Unknown Company")
+                loc = item.get("location", "Remote")
+                if not loc or not loc.strip():
+                    loc = "Remote"
+                desc = self._clean_html(item.get("description", ""))
+                apply_url = item.get("url", "")
+                if apply_url and not apply_url.startswith("http"):
+                    apply_url = f"https://remoteok.com{apply_url}"
+
+                tags = item.get("tags", [])
+                tags_str = ", ".join(tags) if tags else ""
+
+                if not self._matches_query(query, title, desc, tags_str):
+                    continue
+
+                if title and apply_url:
+                    jobs.append({
+                        "title": title.strip(),
+                        "company": company.strip(),
+                        "location": loc.strip(),
+                        "description": desc or f"Remote job listing for {title} at {company}.",
+                        "url": apply_url.strip(),
+                        "source": "RemoteOK"
+                    })
+                    count += 1
+
+            print(f"[RemoteOK] Found {len(jobs)} jobs.")
+        except Exception as e:
+            print(f"[RemoteOK] API request failed: {e}")
+        return jobs
+
+    # ─── Arbeitnow API ────────────────────────────────────────────────────
+    # Free, no API key needed, global + remote, location & remote filters
+    async def fetch_arbeitnow_jobs(self, query: str = "", location: str = "", limit: int = 10) -> List[Dict[str, Any]]:
+        jobs = []
+        try:
+            url = "https://www.arbeitnow.com/api/job-board-api"
+            print(f"[Arbeitnow] Fetching jobs for '{query}' in '{location}'...")
+            data = await asyncio.to_thread(self._http_get_json, url)
+
+            results = data.get("data", [])
+            count = 0
+            for item in results:
+                if count >= limit:
+                    break
+
+                title = item.get("title", "")
+                company = item.get("company_name", "Unknown Company")
+                loc = item.get("location", "")
+                is_remote = item.get("remote", False)
+                if is_remote:
+                    loc = f"Remote — {loc}" if loc else "Remote"
+                desc = self._clean_html(item.get("description", ""))
+                apply_url = item.get("url", "")
+
+                if not self._matches_location(location, loc):
+                    # For remote filter, also check the remote flag
+                    if location and location.lower() == "remote" and is_remote:
+                        pass  # remote match
+                    else:
+                        continue
+
+                if not self._matches_query(query, title, desc):
+                    continue
+
+                if title and apply_url:
+                    jobs.append({
+                        "title": title.strip(),
+                        "company": company.strip(),
+                        "location": loc.strip() if loc else "Not specified",
+                        "description": desc or f"Job listing for {title} at {company}.",
+                        "url": apply_url.strip(),
+                        "source": "Arbeitnow"
+                    })
+                    count += 1
+
+            print(f"[Arbeitnow] Found {len(jobs)} jobs.")
+        except Exception as e:
+            print(f"[Arbeitnow] API request failed: {e}")
+        return jobs
+
+    # ─── Himalayas API ────────────────────────────────────────────────────
+    # Free, no API key needed, remote jobs with keyword and country search
+    async def fetch_himalayas_jobs(self, query: str = "", limit: int = 10) -> List[Dict[str, Any]]:
+        jobs = []
+        try:
+            params = f"limit={limit * 2}"
+            if query:
+                params += f"&q={urllib.parse.quote(query)}"
+            url = f"https://himalayas.app/jobs/api?{params}"
+            print(f"[Himalayas] Fetching remote jobs for '{query}'...")
+            data = await asyncio.to_thread(self._http_get_json, url)
+
+            results = data.get("jobs", [])
+            count = 0
+            for item in results:
+                if count >= limit:
+                    break
+
+                title = item.get("title", "")
+                company = item.get("companyName", "") or item.get("company_name", "Unknown Company")
+                loc_parts = item.get("locationRestrictions", [])
+                if isinstance(loc_parts, list):
+                    loc = ", ".join(loc_parts) if loc_parts else "Remote"
+                else:
+                    loc = str(loc_parts) if loc_parts else "Remote"
+                desc = self._clean_html(item.get("description", ""))
+                apply_url = item.get("applicationLink", "") or item.get("url", "")
+
+                if not self._matches_query(query, title, desc):
+                    continue
+
+                if title and apply_url:
+                    jobs.append({
+                        "title": title.strip(),
+                        "company": company.strip(),
+                        "location": loc if loc else "Remote",
+                        "description": desc or f"Remote job listing for {title} at {company}.",
+                        "url": apply_url.strip(),
+                        "source": "Himalayas"
+                    })
+                    count += 1
+
+            print(f"[Himalayas] Found {len(jobs)} jobs.")
+        except Exception as e:
+            print(f"[Himalayas] API request failed: {e}")
+        return jobs
+
+    # ─── Greenhouse Boards API ────────────────────────────────────────────
+    # Free, no API key, public job board endpoint for curated companies
+    async def fetch_greenhouse_jobs(self, query: str = "", location: str = "", limit: int = 10) -> List[Dict[str, Any]]:
+        jobs = []
+
+        async def _fetch_board(board_token: str, company_name: str) -> List[Dict[str, Any]]:
+            board_jobs = []
+            try:
+                url = f"https://boards-api.greenhouse.io/v1/boards/{board_token}/jobs?content=true"
+                data = await asyncio.to_thread(self._http_get_json, url, timeout=10)
+
+                for item in data.get("jobs", []):
+                    title = item.get("title", "")
+                    loc_data = item.get("location", {})
+                    loc = loc_data.get("name", "") if isinstance(loc_data, dict) else str(loc_data)
+
+                    desc = self._clean_html(item.get("content", ""))
+                    apply_url = item.get("absolute_url", "")
+
+                    if not self._matches_location(location, loc):
+                        continue
+                    if not self._matches_query(query, title, desc):
+                        continue
+
+                    if title and apply_url:
+                        board_jobs.append({
+                            "title": title.strip(),
+                            "company": company_name,
+                            "location": loc.strip() if loc else "Not specified",
+                            "description": desc or f"Job listing for {title} at {company_name}.",
+                            "url": apply_url.strip(),
+                            "source": "Greenhouse"
+                        })
+            except Exception:
+                pass  # silently skip boards that 404, timeout, etc.
+            return board_jobs
+
+        print(f"[Greenhouse] Fetching jobs from {len(GREENHOUSE_BOARDS)} company boards...")
+
+        # Fetch concurrently with a semaphore to avoid hammering
+        sem = asyncio.Semaphore(6)
+
+        async def _fetch_with_sem(token: str, name: str):
+            async with sem:
+                return await _fetch_board(token, name)
+
+        board_results = await asyncio.gather(
+            *[_fetch_with_sem(token, name) for token, name in GREENHOUSE_BOARDS.items()],
+            return_exceptions=True
+        )
+
+        for res in board_results:
+            if isinstance(res, list):
+                jobs.extend(res)
+
+        jobs = jobs[:limit]
+        print(f"[Greenhouse] Found {len(jobs)} jobs across company boards.")
+        return jobs
+
+    # ─── Lever Postings API ───────────────────────────────────────────────
+    # Free, no API key, public postings for curated companies
+    async def fetch_lever_jobs(self, query: str = "", location: str = "", limit: int = 10) -> List[Dict[str, Any]]:
+        jobs = []
+
+        async def _fetch_board(slug: str, company_name: str) -> List[Dict[str, Any]]:
+            board_jobs = []
+            try:
+                url = f"https://api.lever.co/v0/postings/{slug}?mode=json"
+                data = await asyncio.to_thread(self._http_get_json, url, timeout=10)
+
+                if not isinstance(data, list):
+                    return []
+
+                for item in data:
+                    title = item.get("text", "")
+                    categories = item.get("categories", {})
+                    loc = categories.get("location", "") if isinstance(categories, dict) else ""
+
+                    desc_plain = item.get("descriptionPlain", "")
+                    additional = item.get("additionalPlain", "")
+                    desc = f"{desc_plain} {additional}".strip()[:2000]
+
+                    apply_url = item.get("applyUrl", "") or item.get("hostedUrl", "")
+
+                    if not self._matches_location(location, loc):
+                        continue
+                    if not self._matches_query(query, title, desc):
+                        continue
+
+                    if title and apply_url:
+                        board_jobs.append({
+                            "title": title.strip(),
+                            "company": company_name,
+                            "location": loc.strip() if loc else "Not specified",
+                            "description": desc or f"Job listing for {title} at {company_name}.",
+                            "url": apply_url.strip(),
+                            "source": "Lever"
+                        })
+            except Exception:
+                pass  # silently skip boards that 404, timeout, etc.
+            return board_jobs
+
+        print(f"[Lever] Fetching jobs from {len(LEVER_BOARDS)} company boards...")
+
+        sem = asyncio.Semaphore(6)
+
+        async def _fetch_with_sem(slug: str, name: str):
+            async with sem:
+                return await _fetch_board(slug, name)
+
+        board_results = await asyncio.gather(
+            *[_fetch_with_sem(slug, name) for slug, name in LEVER_BOARDS.items()],
+            return_exceptions=True
+        )
+
+        for res in board_results:
+            if isinstance(res, list):
+                jobs.extend(res)
+
+        jobs = jobs[:limit]
+        print(f"[Lever] Found {len(jobs)} jobs across company boards.")
+        return jobs
+
+    # ═══════════════════════════════════════════════════════════════════════
+    #  API-KEY SOURCES (require user-configured keys)
+    # ═══════════════════════════════════════════════════════════════════════
+
+    # ─── JSearch API (RapidAPI) ───────────────────────────────────────────
+    # Free tier: 500 requests/month
+    # Returns real jobs from LinkedIn, Indeed, Glassdoor, Naukri with direct apply links
+    async def fetch_jsearch_jobs(self, query: str = "", location: str = "Remote", limit: int = 10, api_key: str = "") -> List[Dict[str, Any]]:
+        key = api_key or settings.JSEARCH_API_KEY
+        if not key:
+            print("[JSearch] No API key configured, skipping.")
+            return []
+
+        jobs = []
+        try:
+            search_query = f"{query} in {location}" if location else query
+            num_pages = 2 if limit > 10 else 1
+            url = (
+                f"https://jsearch.p.rapidapi.com/search?"
+                f"query={urllib.parse.quote(search_query)}"
+                f"&num_pages={num_pages}"
+                f"&page=1"
+            )
+            headers = {
+                "X-RapidAPI-Key": key,
+                "X-RapidAPI-Host": "jsearch.p.rapidapi.com"
+            }
+
+            print(f"[JSearch] Fetching jobs for '{search_query}' (pages={num_pages})...")
+            data = await asyncio.to_thread(self._http_get_json, url, headers)
+
+            results = data.get("data", [])
+            count = 0
+            for item in results:
+                if count >= limit:
+                    break
+
+                title = item.get("job_title", "")
+                company = item.get("employer_name", "Unknown Company")
+                loc = item.get("job_city", "") or item.get("job_state", "") or item.get("job_country", location)
+                if item.get("job_is_remote"):
+                    loc = f"Remote — {loc}" if loc else "Remote"
+                desc = (item.get("job_description", "") or "")[:2000]
+                apply_url = item.get("job_apply_link") or item.get("job_google_link", "")
+
+                if title and apply_url:
+                    jobs.append({
+                        "title": title.strip(),
+                        "company": company.strip(),
+                        "location": loc.strip() if loc else "Not specified",
+                        "description": desc.strip() or f"Job listing for {title} at {company}.",
+                        "url": apply_url.strip(),
+                        "source": "JSearch"
+                    })
+                    count += 1
+
+            print(f"[JSearch] Found {len(jobs)} jobs.")
+        except Exception as e:
+            print(f"[JSearch] API request failed: {e}")
+        return jobs
+
     # ─── Adzuna API ───────────────────────────────────────────────────────
-    # Free tier: 250 requests/day
-    async def fetch_adzuna_jobs(self, query: str = "", location: str = "Remote", limit: int = 5, app_id: str = "", app_key: str = "") -> List[Dict[str, Any]]:
+    # Free tier: 250 requests/day — auto-detects India from location
+    async def fetch_adzuna_jobs(self, query: str = "", location: str = "Remote", limit: int = 10, app_id: str = "", app_key: str = "") -> List[Dict[str, Any]]:
         aid = app_id or settings.ADZUNA_APP_ID
         akey = app_key or settings.ADZUNA_APP_KEY
         if not aid or not akey:
@@ -240,11 +604,18 @@ class ScraperService:
 
         jobs = []
         try:
-            # Adzuna uses country codes in the URL. Default to 'us'.
+            # Auto-detect India from location keywords
             country = "us"
+            if location:
+                loc_lower = location.lower()
+                for kw in INDIA_LOCATION_KEYWORDS:
+                    if kw in loc_lower:
+                        country = "in"
+                        break
+
             search_what = urllib.parse.quote(query)
             search_where = urllib.parse.quote(location) if location and location.lower() != "remote" else ""
-            
+
             url = (
                 f"https://api.adzuna.com/v1/api/jobs/{country}/search/1?"
                 f"app_id={aid}&app_key={akey}"
@@ -254,7 +625,7 @@ class ScraperService:
             if search_where:
                 url += f"&where={search_where}"
 
-            print(f"[Adzuna] Fetching jobs for '{query}' in '{location}'...")
+            print(f"[Adzuna] Fetching jobs for '{query}' in '{location}' (country={country})...")
             data = await asyncio.to_thread(self._http_get_json, url)
 
             results = data.get("results", [])
@@ -266,7 +637,7 @@ class ScraperService:
                 title = item.get("title", "")
                 company = item.get("company", {}).get("display_name", "Unknown Company")
                 loc = item.get("location", {}).get("display_name", location)
-                desc = item.get("description", "")[:2000]
+                desc = (item.get("description", "") or "")[:2000]
                 apply_url = item.get("redirect_url", "") or item.get("adref", "")
 
                 if title and apply_url:
@@ -285,8 +656,9 @@ class ScraperService:
             print(f"[Adzuna] API request failed: {e}")
         return jobs
 
-    # ─── Apify API (kept from original) ───────────────────────────────────
-    async def fetch_apify_jobs(self, query: str = "", location: str = "Remote", limit: int = 5, apify_api_token: str = "") -> List[Dict[str, Any]]:
+    # ─── Apify API ────────────────────────────────────────────────────────
+    # For direct scraping of Naukri, Internshala, LinkedIn via Apify actors
+    async def fetch_apify_jobs(self, query: str = "", location: str = "Remote", limit: int = 10, apify_api_token: str = "") -> List[Dict[str, Any]]:
         token = apify_api_token
         if not token:
             print("[Apify] No APIFY_API_TOKEN found, skipping.")
@@ -330,7 +702,9 @@ class ScraperService:
 
         return jobs
 
-    # ─── Main Discovery Orchestrator ──────────────────────────────────────
+    # ═══════════════════════════════════════════════════════════════════════
+    #  MAIN DISCOVERY ORCHESTRATOR
+    # ═══════════════════════════════════════════════════════════════════════
     async def discover_and_match_jobs(
         self,
         db: Session,
@@ -357,7 +731,11 @@ class ScraperService:
         else:
             # Resolve "all" to available sources
             if "all" in sources:
-                sources = ["remotive", "themuse"]
+                # All free sources always included
+                sources = [
+                    "remotive", "themuse", "remoteok",
+                    "arbeitnow", "himalayas", "greenhouse", "lever"
+                ]
                 # Add API-key sources only if keys are available
                 if jsearch_api_key or settings.JSEARCH_API_KEY:
                     sources.append("jsearch")
@@ -367,19 +745,32 @@ class ScraperService:
                     sources.append("apify")
 
             sources = list(set(sources))
-            limit_per_source = max(2, limit // len(sources)) if sources else limit
+
+            # Overfetch from each source — each gets the full user limit.
+            # We deduplicate and trim to the exact requested limit after.
+            per_source_limit = max(10, limit)
 
             tasks = []
             if "jsearch" in sources:
-                tasks.append(self.fetch_jsearch_jobs(query, location, limit_per_source, jsearch_api_key or ""))
+                tasks.append(self.fetch_jsearch_jobs(query, location, per_source_limit, jsearch_api_key or ""))
             if "remotive" in sources:
-                tasks.append(self.fetch_remotive_jobs(query, limit_per_source))
+                tasks.append(self.fetch_remotive_jobs(query, location, per_source_limit))
             if "themuse" in sources:
-                tasks.append(self.fetch_themuse_jobs(query, location, limit_per_source))
+                tasks.append(self.fetch_themuse_jobs(query, location, per_source_limit))
             if "adzuna" in sources:
-                tasks.append(self.fetch_adzuna_jobs(query, location, limit_per_source, adzuna_app_id or "", adzuna_app_key or ""))
+                tasks.append(self.fetch_adzuna_jobs(query, location, per_source_limit, adzuna_app_id or "", adzuna_app_key or ""))
             if "apify" in sources:
-                tasks.append(self.fetch_apify_jobs(query, location, limit_per_source, apify_api_token or ""))
+                tasks.append(self.fetch_apify_jobs(query, location, per_source_limit, apify_api_token or ""))
+            if "remoteok" in sources:
+                tasks.append(self.fetch_remoteok_jobs(query, per_source_limit))
+            if "arbeitnow" in sources:
+                tasks.append(self.fetch_arbeitnow_jobs(query, location, per_source_limit))
+            if "himalayas" in sources:
+                tasks.append(self.fetch_himalayas_jobs(query, per_source_limit))
+            if "greenhouse" in sources:
+                tasks.append(self.fetch_greenhouse_jobs(query, location, per_source_limit))
+            if "lever" in sources:
+                tasks.append(self.fetch_lever_jobs(query, location, per_source_limit))
 
             results = await asyncio.gather(*tasks, return_exceptions=True)
             for res in results:
@@ -388,14 +779,18 @@ class ScraperService:
                 else:
                     print(f"Sub-source task failed: {res}")
 
-        # Fallback to mock if nothing found
+        # ─── Deduplicate by URL ───────────────────────────────────────────
+        seen_urls = set()
+        unique_jobs = []
+        for job in scraped_jobs:
+            if job["url"] not in seen_urls:
+                seen_urls.add(job["url"])
+                unique_jobs.append(job)
+        scraped_jobs = unique_jobs
+
         if not scraped_jobs:
-            print("No jobs found from any source. Injecting mock fallback jobs.")
-            suffix = str(uuid.uuid4())[:8]
-            for mj in self.mock_jobs:
-                job_copy = mj.copy()
-                job_copy["url"] = f"{mj['url']}-{suffix}"
-                scraped_jobs.append(job_copy)
+            print("No jobs found from any source. Returning 0.")
+            return 0
 
         new_jobs_count = 0
         matched_count = 0
@@ -416,7 +811,7 @@ class ScraperService:
             if rate_limit_hit:
                 print("Job matching aborted early due to rate limit constraints.")
                 break
-                
+
             # Check if job already exists
             existing_job = db.query(Job).filter(Job.url == job_data["url"]).first()
             if not existing_job:

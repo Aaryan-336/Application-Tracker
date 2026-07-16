@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, DateTime, Text
+from sqlalchemy import Column, String, DateTime, Text, Boolean
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -15,6 +15,9 @@ class Job(Base):
     description = Column(Text, nullable=False)
     url = Column(String, unique=True, nullable=False, index=True)
     source = Column(String, nullable=False)  # e.g., 'LinkedIn', 'Indeed'
+    seniority_level = Column(String, nullable=True)  # 'entry', 'mid', 'senior'
+    posted_at = Column(DateTime, nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

@@ -68,6 +68,37 @@ try:
             conn.execute(text("ALTER TABLE users ADD COLUMN gmail_sync_enabled BOOLEAN DEFAULT FALSE"))
             conn.commit()
             print("gmail_sync_enabled migration completed.")
+
+        # Migrate new job table columns
+        res_sen = conn.execute(text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name='jobs' AND column_name='seniority_level'"
+        ))
+        if not res_sen.fetchone():
+            print("Running inline database migration to add seniority_level to jobs table...")
+            conn.execute(text("ALTER TABLE jobs ADD COLUMN seniority_level VARCHAR(50) NULL"))
+            conn.commit()
+            print("seniority_level migration completed.")
+
+        res_post = conn.execute(text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name='jobs' AND column_name='posted_at'"
+        ))
+        if not res_post.fetchone():
+            print("Running inline database migration to add posted_at to jobs table...")
+            conn.execute(text("ALTER TABLE jobs ADD COLUMN posted_at TIMESTAMP NULL"))
+            conn.commit()
+            print("posted_at migration completed.")
+
+        res_act = conn.execute(text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name='jobs' AND column_name='is_active'"
+        ))
+        if not res_act.fetchone():
+            print("Running inline database migration to add is_active to jobs table...")
+            conn.execute(text("ALTER TABLE jobs ADD COLUMN is_active BOOLEAN DEFAULT TRUE"))
+            conn.commit()
+            print("is_active migration completed.")
 except Exception as migration_err:
     print(f"Inline database migration log (SQLite or already migrated): {migration_err}")
 

@@ -99,6 +99,7 @@ async def trigger_job_discovery(
         jsearch_api_key=current_user.jsearch_api_key,
         adzuna_app_id=current_user.adzuna_app_id,
         adzuna_app_key=current_user.adzuna_app_key,
-        groq_api_key=current_user.groq_api_key
+        groq_api_key=current_user.groq_api_key,
+        experience_level=current_user.experience_level
     )
     return {"message": "Job discovery completed successfully", "new_jobs_discovered": new_jobs}

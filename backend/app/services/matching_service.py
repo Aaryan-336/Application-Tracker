@@ -1,5 +1,5 @@
 import json
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from app.models.resume import Resume
 from app.models.job import Job
 from app.services.groq_service import groq_service
@@ -61,5 +61,23 @@ class MatchingService:
                 "matching_skills": [],
                 "missing_skills": []
             }
+
+    def adjust_score_for_experience(self, base_score: int, user_level: Optional[str], job_level: Optional[str]) -> int:
+        """
+        Apply a deterministic penalty to the match score if there's a gap
+        between the user's preferred experience level and the job seniority level.
+        """
+        if not user_level or not job_level:
+            return base_score
+
+        level_order = {"entry": 0, "mid": 1, "senior": 2, "lead": 3, "executive": 4}
+        user_rank = level_order.get(user_level.lower().strip(), 1)
+        job_rank = level_order.get(job_level.lower().strip(), 1)
+        gap = abs(user_rank - job_rank)
+
+        penalties = {0: 0, 1: 10, 2: 30, 3: 50, 4: 50}
+        penalty = penalties.get(gap, 50)
+
+        return max(0, base_score - penalty)
 
 matching_service = MatchingService()

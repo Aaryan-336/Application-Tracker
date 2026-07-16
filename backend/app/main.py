@@ -47,7 +47,7 @@ try:
             print("Apify API Token migration completed.")
 
         # Migrate new job API key columns
-        for col_name in ['jsearch_api_key', 'adzuna_app_id', 'adzuna_app_key']:
+        for col_name in ['jsearch_api_key', 'adzuna_app_id', 'adzuna_app_key', 'groq_api_key']:
             res_col = conn.execute(text(
                 f"SELECT column_name FROM information_schema.columns "
                 f"WHERE table_name='users' AND column_name='{col_name}'"

@@ -74,6 +74,8 @@ def update_profile(
         current_user.adzuna_app_id = profile_in.adzuna_app_id
     if profile_in.adzuna_app_key is not None:
         current_user.adzuna_app_key = profile_in.adzuna_app_key
+    if profile_in.groq_api_key is not None:
+        current_user.groq_api_key = profile_in.groq_api_key
     if profile_in.gmail_sync_enabled is not None:
         current_user.gmail_sync_enabled = profile_in.gmail_sync_enabled
     

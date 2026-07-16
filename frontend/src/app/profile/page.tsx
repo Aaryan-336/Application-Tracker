@@ -16,6 +16,7 @@ export default function Profile() {
     jsearch_api_key: "",
     adzuna_app_id: "",
     adzuna_app_key: "",
+    groq_api_key: "",
   });
   const [resume, setResume] = useState<any>(null);
   const [uploading, setUploading] = useState(false);
@@ -41,6 +42,7 @@ export default function Profile() {
           jsearch_api_key: u.jsearch_api_key || "",
           adzuna_app_id: u.adzuna_app_id || "",
           adzuna_app_key: u.adzuna_app_key || "",
+          groq_api_key: u.groq_api_key || "",
         });
 
         try {
@@ -108,6 +110,7 @@ export default function Profile() {
         jsearch_api_key: updated.jsearch_api_key || "",
         adzuna_app_id: updated.adzuna_app_id || "",
         adzuna_app_key: updated.adzuna_app_key || "",
+        groq_api_key: updated.groq_api_key || "",
       });
       setSuccessMsg("SYSTEM: Profile preference structures updated.");
     } catch (err: any) {
@@ -287,6 +290,25 @@ export default function Profile() {
                   <option value="lead">Lead / Principal (8+ years)</option>
                   <option value="executive">Executive (10+ years)</option>
                 </select>
+              </div>
+
+              <div className="space-y-1.5 font-mono">
+                <label className="block text-[10px] font-bold text-accent uppercase tracking-wider">
+                  GROQ_API_KEY <span className="text-success">(AI MATCHING ENGINE)</span>
+                </label>
+                <input
+                  type="password"
+                  value={profile.groq_api_key || ""}
+                  onChange={(e) => setProfile({ ...profile, groq_api_key: e.target.value })}
+                  placeholder="e.g. gsk_xxxxxxxxxxxxxxxxxxxx"
+                  className="w-full rounded bg-black/40 border border-accent/30 px-4 py-3 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-accent"
+                />
+                <span className="text-[10px] text-gray-500 block leading-relaxed mt-1">
+                  Your own Groq key for AI resume-job matching. Each user&apos;s matching runs on their own quota. Get a free key at{" "}
+                  <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="text-accent underline font-semibold">
+                    console.groq.com/keys
+                  </a>.
+                </span>
               </div>
 
               <div className="space-y-1.5 font-mono">

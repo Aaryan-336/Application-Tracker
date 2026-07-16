@@ -86,6 +86,7 @@ export const api = {
             jsearch_api_key?: string;
             adzuna_app_id?: string;
             adzuna_app_key?: string;
+            groq_api_key?: string;
         }>("/auth/me"),
 
     updateProfile: (profile: {
@@ -93,6 +94,7 @@ export const api = {
         preferred_roles?: string[];
         preferred_locations?: string[];
         salary_expectation?: number;
+        groq_api_key?: string;
     }) =>
         request<any>("/auth/profile", {
             method: "PUT",

@@ -28,9 +28,16 @@ class GroqService:
         system_instruction: str = "You are a helpful AI career assistant.",
         model: str = "llama-3.3-70b-versatile",
         temperature: float = 0.2,
-        response_format: Optional[Dict[str, Any]] = None
+        response_format: Optional[Dict[str, Any]] = None,
+        api_key: Optional[str] = None
     ) -> str:
         try:
+            # Use per-user key if provided, otherwise fall back to global client
+            if api_key:
+                active_client = Groq(api_key=api_key)
+            else:
+                active_client = self.client
+
             messages = [
                 {"role": "system", "content": system_instruction},
                 {"role": "user", "content": prompt}
@@ -44,7 +51,7 @@ class GroqService:
             if response_format:
                 kwargs["response_format"] = response_format
 
-            chat_completion = self.client.chat.completions.create(**kwargs)
+            chat_completion = active_client.chat.completions.create(**kwargs)
             return chat_completion.choices[0].message.content
         except Exception as e:
             print(f"Error in Groq API request: {e}")

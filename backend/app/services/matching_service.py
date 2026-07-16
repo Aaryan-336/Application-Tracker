@@ -5,7 +5,7 @@ from app.models.job import Job
 from app.services.groq_service import groq_service
 
 class MatchingService:
-    def match_resume_to_job(self, resume: Resume, job: Job) -> Dict[str, Any]:
+    def match_resume_to_job(self, resume: Resume, job: Job, groq_api_key: str = "") -> Dict[str, Any]:
         system_instruction = (
             "You are an expert technical recruiter and talent matching AI. "
             "Your task is to compare a candidate's resume (skills, experience, education) against a job description. "
@@ -44,7 +44,8 @@ class MatchingService:
         response_str = groq_service.chat_completion(
             prompt=prompt,
             system_instruction=system_instruction,
-            response_format={"type": "json_object"}
+            response_format={"type": "json_object"},
+            api_key=groq_api_key or None
         )
 
         try:

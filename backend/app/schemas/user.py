@@ -23,6 +23,7 @@ class UserUpdate(BaseModel):
     jsearch_api_key: Optional[str] = None
     adzuna_app_id: Optional[str] = None
     adzuna_app_key: Optional[str] = None
+    groq_api_key: Optional[str] = None
     gmail_sync_enabled: Optional[bool] = None
 
 class UserResponse(UserBase):
@@ -36,6 +37,7 @@ class UserResponse(UserBase):
     jsearch_api_key: Optional[str] = None
     adzuna_app_id: Optional[str] = None
     adzuna_app_key: Optional[str] = None
+    groq_api_key: Optional[str] = None
     gmail_sync_enabled: Optional[bool] = False
     created_at: datetime
     updated_at: datetime

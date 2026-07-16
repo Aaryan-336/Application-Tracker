@@ -716,7 +716,8 @@ class ScraperService:
         apify_api_token: Optional[str] = None,
         jsearch_api_key: Optional[str] = None,
         adzuna_app_id: Optional[str] = None,
-        adzuna_app_key: Optional[str] = None
+        adzuna_app_key: Optional[str] = None,
+        groq_api_key: Optional[str] = None
     ) -> int:
         print(f"Starting job discovery: query='{query}', location='{location}', limit={limit}, sources={sources}, use_mock={use_mock}")
         scraped_jobs = []
@@ -801,7 +802,7 @@ class ScraperService:
         for u in users:
             resume = db.query(Resume).filter(Resume.user_id == u.id).order_by(Resume.created_at.desc()).first()
             if resume:
-                user_resumes[u.id] = resume
+                user_resumes[u.id] = (resume, u.groq_api_key or "")
 
         # Limit to the actual overall requested count
         scraped_jobs = scraped_jobs[:limit]
@@ -831,7 +832,7 @@ class ScraperService:
                 db_job = existing_job
 
             # Run matches for this job against all user resumes
-            for user_id, resume in user_resumes.items():
+            for user_id, (resume, user_groq_key) in user_resumes.items():
                 existing_match = db.query(UserJob).filter(
                     UserJob.user_id == user_id,
                     UserJob.job_id == db_job.id
@@ -839,8 +840,10 @@ class ScraperService:
 
                 if not existing_match:
                     try:
+                        # Prefer user's own Groq key, then caller's key, then global
+                        effective_groq_key = user_groq_key or groq_api_key or ""
                         print(f"Matching resume ({user_id}) against job '{db_job.title}'")
-                        match_result = matching_service.match_resume_to_job(resume, db_job)
+                        match_result = matching_service.match_resume_to_job(resume, db_job, groq_api_key=effective_groq_key)
 
                         user_job = UserJob(
                             user_id=user_id,

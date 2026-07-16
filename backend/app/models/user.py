@@ -25,6 +25,7 @@ class User(Base):
     jsearch_api_key = Column(String, nullable=True)
     adzuna_app_id = Column(String, nullable=True)
     adzuna_app_key = Column(String, nullable=True)
+    groq_api_key = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

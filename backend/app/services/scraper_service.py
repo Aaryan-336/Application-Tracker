@@ -117,16 +117,20 @@ class ScraperService:
     # ─── HTTP helpers ─────────────────────────────────────────────────────
     def _http_get_json(self, url: str, headers: Optional[Dict[str, str]] = None, timeout: int = 20) -> Any:
         """Synchronous HTTP GET that returns parsed JSON. Used inside asyncio.to_thread."""
+        import ssl
+        context = ssl._create_unverified_context()
         req = urllib.request.Request(url)
         req.add_header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
         if headers:
             for k, v in headers.items():
                 req.add_header(k, v)
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.urlopen(req, timeout=timeout, context=context) as resp:
             return json.loads(resp.read().decode("utf-8"))
 
     def _http_post_json(self, url: str, payload: Dict, headers: Optional[Dict[str, str]] = None, timeout: int = 45) -> Any:
         """Synchronous HTTP POST that returns parsed JSON. Used inside asyncio.to_thread."""
+        import ssl
+        context = ssl._create_unverified_context()
         req = urllib.request.Request(
             url,
             data=json.dumps(payload).encode("utf-8"),
@@ -136,7 +140,7 @@ class ScraperService:
         if headers:
             for k, v in headers.items():
                 req.add_header(k, v)
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.urlopen(req, timeout=timeout, context=context) as resp:
             return json.loads(resp.read().decode("utf-8"))
 
     # ─── Helper: keyword match check ──────────────────────────────────────
